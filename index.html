@@ -109,6 +109,15 @@
     th { color: var(--muted); font-weight: 500; }
     .empty-records { color: var(--muted); font-style: italic; padding: 1rem 0; }
     .total-cost-display { font-size: 1.1rem; }
+    .cutting-line { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 0.5rem; margin-bottom: 0.75rem; padding: 0.75rem; background: var(--bg); border-radius: 8px; border: 1px solid var(--border); }
+    .cutting-line .line-weight { font-size: 0.9rem; color: var(--accent); margin-left: auto; }
+    .cutting-line button.remove-line { padding: 0.4rem 0.75rem; font-size: 0.85rem; background: #7f1d1d; color: #fecaca; border: none; border-radius: 6px; cursor: pointer; }
+    .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); display: flex; align-items: center; justify-content: center; z-index: 100; padding: 1rem; }
+    .modal { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 1.5rem; max-width: 400px; width: 100%; }
+    .modal h3 { margin: 0 0 1rem 0; color: var(--accent); }
+    .modal .row label { flex: 1; min-width: 120px; }
+    .validation-msg { font-size: 0.8rem; color: #fca5a5; margin-top: 0.25rem; }
+    select { background: var(--bg); border: 1px solid var(--border); border-radius: 6px; color: var(--text); padding: 0.5rem 0.75rem; font-size: 1rem; width: 100%; min-width: 200px; }
   </style>
 </head>
 <body>
@@ -122,33 +131,33 @@
         <h2>Client</h2>
         <div class="row">
           <label style="flex: 1; min-width: 200px;">
-            <span>Client name</span>
-            <input type="text" id="clientName" placeholder="Enter client name" required>
+            <span>Select client</span>
+            <select id="clientSelect" required>
+              <option value="">-- Select or add client --</option>
+            </select>
           </label>
+          <button type="button" class="secondary" id="btnNewClient">+ New client</button>
         </div>
       </section>
 
       <section>
-        <h2>Original plate size (mm)</h2>
+        <h2>Original plate size (mm) <span style="color:var(--muted);font-size:0.85rem;">Max: L 4000, W 4000, T 17</span></h2>
         <div class="row">
-          <label><span>Length (mm)</span><input type="number" id="origLength" min="0" step="0.1" value="0"></label>
-          <label><span>Width (mm)</span><input type="number" id="origWidth" min="0" step="0.1" value="0"></label>
-          <label><span>Thickness (mm)</span><input type="number" id="origThickness" min="0" step="0.1" value="0"></label>
+          <label><span>Length (mm)</span><input type="number" id="origLength" min="0" max="4000" step="0.1" value="0"></label>
+          <label><span>Width (mm)</span><input type="number" id="origWidth" min="0" max="4000" step="0.1" value="0"></label>
+          <label><span>Thickness (mm)</span><input type="number" id="origThickness" min="0" max="17" step="0.1" value="0"></label>
           <label><span>Quantity</span><input type="number" id="origQuantity" min="1" value="1"></label>
         </div>
+        <div id="origValidation" class="validation-msg" style="display:none;"></div>
       </section>
 
       <section>
-        <h2>Cutting size (mm)</h2>
-        <div class="row">
-          <label><span>Length (mm)</span><input type="number" id="cutLength" min="0" step="0.1" value="0"></label>
-          <label><span>Width (mm)</span><input type="number" id="cutWidth" min="0" step="0.1" value="0"></label>
-          <label><span>Thickness (mm)</span><input type="number" id="cutThickness" min="0" step="0.1" value="0"></label>
-          <label><span>Quantity</span><input type="number" id="cutQuantity" min="1" value="1"></label>
-        </div>
-        <div class="row" style="margin-top: 0.75rem;">
-          <label><span>Weight per piece (kg)</span><div class="result" id="weightPerPiece">0</div></label>
-          <label><span>Total weight (kg)</span><div class="result" id="totalWeight">0</div></label>
+        <h2>Cutting sizes (add multiple plate sizes)</h2>
+        <p class="subtitle" style="margin-bottom:0.75rem;">Thickness is copied from Original plate thickness.</p>
+        <div id="cuttingRows"></div>
+        <button type="button" class="secondary" id="btnAddPlate">+ Add plate size</button>
+        <div class="row" style="margin-top: 1rem;">
+          <label><span>Total weight (kg)</span><div class="result total-cost-display" id="totalWeight">0</div></label>
         </div>
       </section>
 
@@ -187,6 +196,20 @@
       </div>
     </form>
 
+    <div id="clientModal" class="modal-overlay" style="display:none;">
+      <div class="modal">
+        <h3>New client</h3>
+        <div class="row"><label><span>Client name</span><input type="text" id="newClientName" required></label></div>
+        <div class="row"><label><span>Address</span><input type="text" id="newClientAddress"></label></div>
+        <div class="row"><label><span>Mobile</span><input type="text" id="newClientMobile" inputmode="tel"></label></div>
+        <div class="row"><label><span>GST number</span><input type="text" id="newClientGst"></label></div>
+        <div class="actions" style="margin-top:1rem;">
+          <button type="button" id="btnSaveClient">Save client</button>
+          <button type="button" class="secondary" id="btnCancelClient">Cancel</button>
+        </div>
+      </div>
+    </div>
+
     <div id="recordsList">
       <h2>Saved records</h2>
       <div id="recordsTableWrap">
@@ -206,9 +229,15 @@
     </div>
   </div>
 
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/supabase.min.js"></script>
   <script>
     (function () {
       var DENSITY_KG_M3 = 7850;
+      var MAX_ORIG_L = 4000, MAX_ORIG_W = 4000, MAX_ORIG_T = 17;
+      var SUPABASE_URL = ''; // Set your Supabase project URL for multi-device sync
+      var SUPABASE_ANON_KEY = ''; // Set your Supabase anon/public key
+      var useSupabase = !!(SUPABASE_URL && SUPABASE_ANON_KEY && typeof window.supabase !== 'undefined');
+      var supabase = useSupabase ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
 
       function $(id) { return document.getElementById(id); }
 
@@ -220,54 +249,96 @@
         return volumeM3(lengthMm, widthMm, thicknessMm) * DENSITY_KG_M3;
       }
 
+      function getOrigThickness() {
+        var el = $('origThickness');
+        return el ? (parseFloat(el.value) || 0) : 0;
+      }
+
+      function syncCuttingThickness() {
+        var t = getOrigThickness();
+        document.querySelectorAll('.cutting-thickness').forEach(function (inp) { inp.value = t; });
+        recalc();
+      }
+
+      function validateOriginalPlate() {
+        var errEl = $('origValidation');
+        var len = parseFloat($('origLength').value) || 0;
+        var wid = parseFloat($('origWidth').value) || 0;
+        var th = parseFloat($('origThickness').value) || 0;
+        var msg = [];
+        if (len > MAX_ORIG_L) { $('origLength').value = MAX_ORIG_L; msg.push('Length capped at ' + MAX_ORIG_L + ' mm'); }
+        if (wid > MAX_ORIG_W) { $('origWidth').value = MAX_ORIG_W; msg.push('Width capped at ' + MAX_ORIG_W + ' mm'); }
+        if (th > MAX_ORIG_T) { $('origThickness').value = MAX_ORIG_T; msg.push('Thickness capped at ' + MAX_ORIG_T + ' mm'); syncCuttingThickness(); }
+        if (errEl) {
+          errEl.textContent = msg.length ? msg.join('. ') : '';
+          errEl.style.display = msg.length ? 'block' : 'none';
+        }
+      }
+
+      function addCuttingRow() {
+        var container = $('cuttingRows');
+        if (!container) return;
+        var t = getOrigThickness();
+        var div = document.createElement('div');
+        div.className = 'cutting-line';
+        div.innerHTML = '<label><span>L (mm)</span><input type="number" class="cut-l" min="0" step="0.1" value="0"></label>' +
+          '<label><span>W (mm)</span><input type="number" class="cut-w" min="0" step="0.1" value="0"></label>' +
+          '<label><span>T (mm)</span><input type="number" class="cutting-thickness" min="0" step="0.1" value="' + t + '"></label>' +
+          '<label><span>Qty</span><input type="number" class="cut-qty" min="1" value="1"></label>' +
+          '<span class="line-weight">0 kg</span>' +
+          '<button type="button" class="remove-line">Remove</button>';
+        container.appendChild(div);
+        div.querySelector('.remove-line').addEventListener('click', function () {
+          div.remove();
+          recalc();
+        });
+        ['cut-l', 'cut-w', 'cutting-thickness', 'cut-qty'].forEach(function (cls) {
+          var inp = div.querySelector('.' + cls);
+          if (inp) { inp.addEventListener('input', recalc); inp.addEventListener('change', recalc); inp.addEventListener('blur', recalc); }
+        });
+        recalc();
+      }
+
       function recalc() {
         var errEl = $('calcError');
         try {
           if (errEl) { errEl.style.display = 'none'; errEl.textContent = ''; }
-          var cutLen = $('cutLength');
-          var cutWid = $('cutWidth');
-          var cutThick = $('cutThickness');
-          var cutQtyEl = $('cutQuantity');
+          validateOriginalPlate();
+          var totalW = 0;
+          var lines = document.querySelectorAll('.cutting-line');
+          lines.forEach(function (div) {
+            var l = parseFloat(div.querySelector('.cut-l').value) || 0;
+            var w = parseFloat(div.querySelector('.cut-w').value) || 0;
+            var t = parseFloat(div.querySelector('.cutting-thickness').value) || 0;
+            var qty = Math.max(0, Math.floor(parseFloat(div.querySelector('.cut-qty').value) || 0));
+            var wp = weightKg(l, w, t);
+            var lineW = wp * qty;
+            totalW += lineW;
+            var span = div.querySelector('.line-weight');
+            if (span) span.textContent = lineW.toFixed(3) + ' kg';
+          });
+          var totalWEl = $('totalWeight');
+          if (totalWEl) totalWEl.textContent = totalW.toFixed(3);
           var totalCutsEl = $('totalCuts');
           var rsPerKgEl = $('rsPerKg');
           var rsPerCutEl = $('rsPerCut');
           var gaugeCheck = $('gaugeCutting');
           var gaugeWeightEl = $('gaugeTotalWeight');
-          var wpEl = $('weightPerPiece');
-          var totalWEl = $('totalWeight');
           var costEl = $('totalCost');
-          if (!cutLen || !cutWid || !cutThick || !wpEl || !totalWEl || !costEl) {
-            if (errEl) { errEl.textContent = 'Missing fields. Try refreshing the page.'; errEl.style.display = 'block'; }
-            return;
-          }
-
-          var cutL = parseFloat(cutLen.value) || 0;
-          var cutW = parseFloat(cutWid.value) || 0;
-          var cutT = parseFloat(cutThick.value) || 0;
-          var cutQty = Math.max(0, Math.floor(parseFloat(cutQtyEl.value) || 0));
-          var wp = weightKg(cutL, cutW, cutT);
-          var totalW = wp * cutQty;
-          wpEl.textContent = wp.toFixed(3);
-          totalWEl.textContent = totalW.toFixed(3);
-
-          var totalCuts = parseFloat(totalCutsEl.value) || 0;
-          var rsPerKg = parseFloat(rsPerKgEl.value) || 0;
-          var rsPerCut = parseFloat(rsPerCutEl.value) || 0;
+          var totalCuts = parseFloat(totalCutsEl && totalCutsEl.value ? totalCutsEl.value : 0) || 0;
+          var rsPerKg = parseFloat(rsPerKgEl && rsPerKgEl.value ? rsPerKgEl.value : 0) || 0;
+          var rsPerCut = parseFloat(rsPerCutEl && rsPerCutEl.value ? rsPerCutEl.value : 0) || 0;
           var cost = 0;
           if (totalCuts > 0 && rsPerCut > 0) {
             cost = totalCuts * rsPerCut;
           } else {
             var weightForCost = (gaugeCheck && gaugeCheck.checked && gaugeWeightEl && gaugeWeightEl.value !== '')
-              ? (parseFloat(gaugeWeightEl.value) || 0)
-              : totalW;
+              ? (parseFloat(gaugeWeightEl.value) || 0) : totalW;
             cost = weightForCost * rsPerKg;
           }
-          costEl.textContent = cost.toFixed(2);
+          if (costEl) costEl.textContent = cost.toFixed(2);
         } catch (e) {
-          if (errEl) {
-            errEl.textContent = 'Error: ' + (e.message || String(e));
-            errEl.style.display = 'block';
-          }
+          if (errEl) { errEl.textContent = 'Error: ' + (e.message || String(e)); errEl.style.display = 'block'; }
         }
       }
 
@@ -308,14 +379,20 @@
       var DB_VERSION = 1;
 
       function init() {
-        ['cutLength', 'cutWidth', 'cutThickness', 'cutQuantity', 'totalCuts', 'rsPerKg', 'rsPerCut', 'gaugeTotalWeight'].forEach(function (id) {
+        ['totalCuts', 'rsPerKg', 'rsPerCut', 'gaugeTotalWeight'].forEach(function (id) {
           var el = $(id);
           bindRecalc(el);
           if (el) {
             el.addEventListener('focus', startRecalcPoll);
-            el.addEventListener('blur', function () {
-              setTimeout(stopRecalcPoll, 300);
-            });
+            el.addEventListener('blur', function () { setTimeout(stopRecalcPoll, 300); });
+          }
+        });
+        ['origLength', 'origWidth', 'origThickness', 'origQuantity'].forEach(function (id) {
+          var el = $(id);
+          if (el) {
+            el.addEventListener('input', function () { validateOriginalPlate(); if (id === 'origThickness') syncCuttingThickness(); recalc(); });
+            el.addEventListener('change', function () { validateOriginalPlate(); if (id === 'origThickness') syncCuttingThickness(); recalc(); });
+            el.addEventListener('blur', function () { validateOriginalPlate(); recalc(); });
           }
         });
         var gaugeEl = $('gaugeCutting');
@@ -332,37 +409,56 @@
             if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
             setTimeout(recalc, 100);
           }
-          btnRecalc.addEventListener('click', function () { doRecalc(); });
-          btnRecalc.addEventListener('touchend', function (e) {
-            e.preventDefault();
-            doRecalc();
-          }, { passive: false });
+          btnRecalc.addEventListener('click', doRecalc);
+          btnRecalc.addEventListener('touchend', function (e) { e.preventDefault(); doRecalc(); }, { passive: false });
         }
+        if ($('cuttingRows') && document.querySelectorAll('.cutting-line').length === 0) addCuttingRow();
+        var btnAdd = $('btnAddPlate');
+        if (btnAdd) btnAdd.addEventListener('click', addCuttingRow);
+        var btnNewClient = $('btnNewClient');
+        if (btnNewClient) btnNewClient.addEventListener('click', function () {
+          $('newClientName').value = ''; $('newClientAddress').value = ''; $('newClientMobile').value = ''; $('newClientGst').value = '';
+          $('clientModal').style.display = 'flex';
+        });
+        if ($('btnCancelClient')) $('btnCancelClient').addEventListener('click', function () { $('clientModal').style.display = 'none'; });
+        if ($('btnSaveClient')) $('btnSaveClient').addEventListener('click', function () {
+          var name = ($('newClientName').value || '').trim();
+          if (!name) { alert('Client name is required.'); return; }
+            saveClient({ name: name, address: ($('newClientAddress').value || '').trim(), mobile: ($('newClientMobile').value || '').trim(), gst_number: ($('newClientGst').value || '').trim() })
+            .then(function (id) {
+              $('clientModal').style.display = 'none';
+              loadClients().then(function () { $('clientSelect').value = String(id); });
+            })
+            .catch(function (err) { alert('Could not save client: ' + (err.message || err)); });
+        });
         if (typeof document.visibilityState !== 'undefined') {
           document.addEventListener('visibilitychange', function () {
             if (document.visibilityState === 'visible') startGlobalRecalc();
             else stopGlobalRecalc();
           });
         }
-        if (typeof document.visibilityState === 'undefined' || document.visibilityState === 'visible') {
-          startGlobalRecalc();
-        }
+        if (typeof document.visibilityState === 'undefined' || document.visibilityState === 'visible') startGlobalRecalc();
         var form = $('mainForm');
         if (form) form.addEventListener('submit', function (e) {
           e.preventDefault();
+          var sel = $('clientSelect');
+          if (!sel || !sel.value) { alert('Please select a client.'); return; }
+          if (document.querySelectorAll('.cutting-line').length === 0) { alert('Add at least one cutting plate size.'); return; }
           var record = getFormRecord();
-          saveRecord(record).then(function () {
-            loadRecords().then(renderRecords);
-          }).catch(function (err) { alert('Could not save: ' + err.message); });
+          saveRecord(record).then(function () { loadRecords().then(renderRecords); }).catch(function (err) { alert('Could not save: ' + (err.message || err)); });
         });
         var btnReset = $('btnReset');
         if (btnReset) btnReset.addEventListener('click', function () {
-          form = $('mainForm');
           if (form) form.reset();
+          $('clientSelect').innerHTML = '<option value="">-- Select or add client --</option>';
+          loadClients().then(renderClients);
+          var cr = $('cuttingRows');
+          if (cr) { cr.innerHTML = ''; addCuttingRow(); }
           var gf = $('gaugeFields');
           if (gf) gf.style.display = 'none';
           recalc();
         });
+        loadClients().then(renderClients);
         loadRecords().then(renderRecords);
         recalc();
       }
@@ -373,116 +469,221 @@
         init();
       }
 
+      var DB_NAME = 'MetalCuttingDB';
+      var STORE_RECORDS = 'records';
+      var STORE_CLIENTS = 'clients';
+      var DB_VERSION = 2;
+
       function openDB() {
-        return new Promise((resolve, reject) => {
-          const r = indexedDB.open(DB_NAME, DB_VERSION);
-          r.onerror = () => reject(r.error);
-          r.onsuccess = () => resolve(r.result);
-          r.onupgradeneeded = (e) => {
-            const db = e.target.result;
-            if (!db.objectStoreNames.contains(STORE_NAME)) {
-              const store = db.createObjectStore(STORE_NAME, { keyPath: 'id', autoIncrement: true });
-              store.createIndex('createdAt', 'createdAt', { unique: false });
+        return new Promise(function (resolve, reject) {
+          var r = indexedDB.open(DB_NAME, DB_VERSION);
+          r.onerror = function () { reject(r.error); };
+          r.onsuccess = function () { resolve(r.result); };
+          r.onupgradeneeded = function (e) {
+            var db = e.target.result;
+            if (!db.objectStoreNames.contains(STORE_RECORDS)) {
+              var rec = db.createObjectStore(STORE_RECORDS, { keyPath: 'id', autoIncrement: true });
+              rec.createIndex('createdAt', 'createdAt', { unique: false });
+            }
+            if (!db.objectStoreNames.contains(STORE_CLIENTS)) {
+              var cl = db.createObjectStore(STORE_CLIENTS, { keyPath: 'id', autoIncrement: true });
+              cl.createIndex('name', 'name', { unique: false });
             }
           };
         });
       }
 
+      function loadClients() {
+        if (useSupabase && supabase) {
+          return supabase.from('clients').select('id,name,address,mobile,gst_number').order('name').then(function (res) {
+            if (res.error) throw res.error;
+            return res.data || [];
+          });
+        }
+        return openDB().then(function (db) {
+          return new Promise(function (resolve, reject) {
+            var tx = db.transaction(STORE_CLIENTS, 'readonly');
+            var store = tx.objectStore(STORE_CLIENTS);
+            var req = store.getAll();
+            req.onsuccess = function () { resolve(req.result || []); };
+            req.onerror = function () { reject(req.error); };
+          });
+        });
+      }
+
+      function saveClient(client) {
+        if (useSupabase && supabase) {
+          return supabase.from('clients').insert({ name: client.name, address: client.address || null, mobile: client.mobile || null, gst_number: client.gst_number || null }).select('id').single().then(function (res) {
+            if (res.error) throw res.error;
+            return res.data.id;
+          });
+        }
+        return openDB().then(function (db) {
+          return new Promise(function (resolve, reject) {
+            var tx = db.transaction(STORE_CLIENTS, 'readwrite');
+            var store = tx.objectStore(STORE_CLIENTS);
+            var payload = { name: client.name, address: client.address || '', mobile: client.mobile || '', gst_number: client.gst_number || '', created_at: new Date().toISOString() };
+            var req = store.add(payload);
+            req.onsuccess = function () { resolve(req.result); };
+            req.onerror = function () { reject(req.error); };
+          });
+        });
+      }
+
+      function getFormRecord() {
+        validateOriginalPlate();
+        var lineItems = [];
+        var totalW = 0;
+        document.querySelectorAll('.cutting-line').forEach(function (div, idx) {
+          var l = parseFloat(div.querySelector('.cut-l').value) || 0;
+          var w = parseFloat(div.querySelector('.cut-w').value) || 0;
+          var t = parseFloat(div.querySelector('.cutting-thickness').value) || 0;
+          var qty = Math.max(0, Math.floor(parseFloat(div.querySelector('.cut-qty').value) || 0));
+          var wp = weightKg(l, w, t);
+          var lineTotal = wp * qty;
+          totalW += lineTotal;
+          lineItems.push({ cut_length: l, cut_width: w, cut_thickness: t, quantity: qty, weight_per_piece: wp, line_total_weight: lineTotal, sort_order: idx });
+        });
+        var totalCuts = parseFloat($('totalCuts') && $('totalCuts').value ? $('totalCuts').value : 0) || 0;
+        var rsPerKg = parseFloat($('rsPerKg') && $('rsPerKg').value ? $('rsPerKg').value : 0) || 0;
+        var rsPerCut = parseFloat($('rsPerCut') && $('rsPerCut').value ? $('rsPerCut').value : 0) || 0;
+        var cost = 0;
+        if (totalCuts > 0 && rsPerCut > 0) cost = totalCuts * rsPerCut;
+        else {
+          var gaugeCheck = $('gaugeCutting');
+          var gaugeWeightEl = $('gaugeTotalWeight');
+          var weightForCost = (gaugeCheck && gaugeCheck.checked && gaugeWeightEl && gaugeWeightEl.value !== '') ? (parseFloat(gaugeWeightEl.value) || 0) : totalW;
+          cost = weightForCost * rsPerKg;
+        }
+        var clientId = $('clientSelect') ? $('clientSelect').value : '';
+        var origL = Math.min(parseFloat($('origLength').value) || 0, MAX_ORIG_L);
+        var origW = Math.min(parseFloat($('origWidth').value) || 0, MAX_ORIG_W);
+        var origT = Math.min(parseFloat($('origThickness').value) || 0, MAX_ORIG_T);
+        return {
+          client_id: clientId,
+          original_plate: { length: origL, width: origW, thickness: origT, quantity: Math.max(1, Math.floor(parseFloat($('origQuantity').value) || 1)) },
+          line_items: lineItems,
+          total_weight: totalW,
+          gauge_cutting: $('gaugeCutting').checked,
+          gauge_size: $('gaugeCutting').checked ? (parseFloat($('gaugeSize').value) || 0) : null,
+          total_cuts: totalCuts || null,
+          gauge_total_weight: $('gaugeCutting').checked && $('gaugeTotalWeight').value ? (parseFloat($('gaugeTotalWeight').value) || null) : null,
+          rs_per_kg: rsPerKg,
+          rs_per_cut: rsPerCut,
+          total_cost: cost,
+          created_at: new Date().toISOString(),
+        };
+      }
+
       function saveRecord(record) {
-        return openDB().then(db => {
-          return new Promise((resolve, reject) => {
-            const tx = db.transaction(STORE_NAME, 'readwrite');
-            const store = tx.objectStore(STORE_NAME);
-            const r = store.add(record);
-            r.onsuccess = () => resolve(r.result);
-            r.onerror = () => reject(r.error);
+        if (useSupabase && supabase) {
+          return supabase.from('jobs').insert({
+            client_id: record.client_id,
+            original_length: record.original_plate.length,
+            original_width: record.original_plate.width,
+            original_thickness: record.original_plate.thickness,
+            original_quantity: record.original_plate.quantity,
+            total_weight: record.total_weight,
+            gauge_cutting: record.gauge_cutting,
+            gauge_size: record.gauge_size,
+            total_cuts: record.total_cuts,
+            gauge_total_weight: record.gauge_total_weight,
+            rs_per_kg: record.rs_per_kg,
+            rs_per_cut: record.rs_per_cut,
+            total_cost: record.total_cost,
+            created_at: record.created_at,
+          }).select('id').single().then(function (res) {
+            if (res.error) throw res.error;
+            var jobId = res.data.id;
+            var rows = (record.line_items || []).map(function (it, i) {
+              return { job_id: jobId, cut_length: it.cut_length, cut_width: it.cut_width, cut_thickness: it.cut_thickness, quantity: it.quantity, weight_per_piece: it.weight_per_piece, line_total_weight: it.line_total_weight, sort_order: i };
+            });
+            if (rows.length === 0) return;
+            return supabase.from('job_line_items').insert(rows).then(function (r2) { if (r2.error) throw r2.error; });
+          });
+        }
+        return openDB().then(function (db) {
+          return new Promise(function (resolve, reject) {
+            var tx = db.transaction(STORE_RECORDS, 'readwrite');
+            var store = tx.objectStore(STORE_RECORDS);
+            var sel = $('clientSelect');
+            var clientName = (sel && sel.options[sel.selectedIndex]) ? sel.options[sel.selectedIndex].text : '–';
+            var payload = { client_id: record.client_id, client_name: clientName, original_plate: record.original_plate, line_items: record.line_items, total_weight: record.total_weight, total_cost: record.total_cost, created_at: record.created_at };
+            var req = store.add(payload);
+            req.onsuccess = function () { resolve(req.result); };
+            req.onerror = function () { reject(req.error); };
           });
         });
       }
 
       function loadRecords() {
-        return openDB().then(db => {
-          return new Promise((resolve, reject) => {
-            const tx = db.transaction(STORE_NAME, 'readonly');
-            const store = tx.objectStore(STORE_NAME);
-            const idx = store.index('createdAt');
-            const req = idx.openCursor(null, 'prev');
-            const rows = [];
-            req.onsuccess = () => {
-              const cursor = req.result;
-              if (cursor) {
-                rows.push(cursor.value);
-                cursor.continue();
-              } else resolve(rows);
+        if (useSupabase && supabase) {
+          return supabase.from('jobs').select('id,client_id,total_weight,total_cost,created_at').order('created_at', { ascending: false }).then(function (res) {
+            if (res.error) throw res.error;
+            var jobs = res.data || [];
+            var clientIds = jobs.map(function (j) { return j.client_id; }).filter(Boolean);
+            if (clientIds.length === 0) return jobs.map(function (j) { return { clientName: '–', totalWeight: j.total_weight, totalCost: j.total_cost, createdAt: j.created_at }; });
+            return supabase.from('clients').select('id,name').in('id', clientIds).then(function (cr) {
+              var map = {};
+              (cr.data || []).forEach(function (c) { map[c.id] = c.name; });
+              return jobs.map(function (j) { return { clientName: map[j.client_id] || '–', totalWeight: j.total_weight, totalCost: j.total_cost, createdAt: j.created_at }; });
+            });
+          });
+        }
+        return openDB().then(function (db) {
+          return new Promise(function (resolve, reject) {
+            var tx = db.transaction(STORE_RECORDS, 'readonly');
+            var store = tx.objectStore(STORE_RECORDS);
+            var idx = store.index('createdAt');
+            var req = idx.openCursor(null, 'prev');
+            var rows = [];
+            req.onsuccess = function () {
+              var cursor = req.result;
+              if (cursor) { rows.push(cursor.value); cursor.continue(); } else resolve(rows);
             };
-            req.onerror = () => reject(req.error);
+            req.onerror = function () { reject(req.error); };
+          });
+        }).then(function (rows) {
+          return rows.map(function (r) {
+            return { clientName: r.client_name || '–', totalWeight: r.total_weight, totalCost: r.total_cost, createdAt: r.created_at };
           });
         });
       }
 
-      function renderRecords(records) {
-        const tbody = $('recordsBody');
-        const table = $('recordsTable');
-        const empty = $('emptyRecords');
-        tbody.innerHTML = '';
-        if (records.length === 0) {
-          table.style.display = 'none';
-          empty.style.display = 'block';
-          return;
-        }
-        empty.style.display = 'none';
-        table.style.display = 'table';
-        records.forEach(r => {
-          const tr = document.createElement('tr');
-          const date = r.createdAt ? new Date(r.createdAt).toLocaleString() : '–';
-          tr.innerHTML = '<td>' + date + '</td><td>' + (r.clientName || '–') + '</td><td>' + (r.totalWeight != null ? Number(r.totalWeight).toFixed(3) : '–') + '</td><td>' + (r.totalCost != null ? Number(r.totalCost).toFixed(2) : '–') + '</td>';
-          tbody.appendChild(tr);
+      function renderClients(clients) {
+        var sel = $('clientSelect');
+        if (!sel) return;
+        var first = sel.querySelector('option');
+        sel.innerHTML = '';
+        if (first) sel.appendChild(first);
+        else sel.innerHTML = '<option value="">-- Select or add client --</option>';
+        clients.forEach(function (c) {
+          var opt = document.createElement('option');
+          opt.value = String(c.id);
+          opt.textContent = c.name;
+          sel.appendChild(opt);
         });
       }
 
-      function getFormRecord() {
-        const cutL = Number($('cutLength').value) || 0;
-        const cutW = Number($('cutWidth').value) || 0;
-        const cutT = Number($('cutThickness').value) || 0;
-        const cutQty = Math.max(0, Math.floor(Number($('cutQuantity').value) || 0));
-        const totalW = weightKg(cutL, cutW, cutT) * cutQty;
-        const totalCuts = Number($('totalCuts').value) || 0;
-        const rsPerKg = Number($('rsPerKg').value) || 0;
-        const rsPerCut = Number($('rsPerCut').value) || 0;
-        let cost = 0;
-        if (totalCuts > 0 && rsPerCut > 0) {
-          cost = totalCuts * rsPerCut;
-        } else {
-          const weightForCost = $('gaugeCutting').checked && $('gaugeTotalWeight').value
-            ? Number($('gaugeTotalWeight').value) || 0
-            : totalW;
-          cost = weightForCost * rsPerKg;
+      function renderRecords(records) {
+        var tbody = $('recordsBody');
+        var table = $('recordsTable');
+        var empty = $('emptyRecords');
+        if (!tbody) return;
+        tbody.innerHTML = '';
+        if (records.length === 0) {
+          if (table) table.style.display = 'none';
+          if (empty) empty.style.display = 'block';
+          return;
         }
-        return {
-          clientName: ($('clientName').value || '').trim(),
-          originalPlate: {
-            length: Number($('origLength').value) || 0,
-            width: Number($('origWidth').value) || 0,
-            thickness: Number($('origThickness').value) || 0,
-            quantity: Math.max(1, Math.floor(Number($('origQuantity').value) || 1)),
-          },
-          cuttingSize: {
-            length: cutL,
-            width: cutW,
-            thickness: cutT,
-            quantity: cutQty,
-          },
-          weightPerPiece: weightKg(cutL, cutW, cutT),
-          totalWeight: totalW,
-          gaugeCutting: $('gaugeCutting').checked,
-          gaugeSize: $('gaugeCutting').checked ? (Number($('gaugeSize').value) || 0) : undefined,
-          totalCuts: totalCuts || undefined,
-          gaugeTotalWeight: $('gaugeCutting').checked ? (Number($('gaugeTotalWeight').value) || undefined) : undefined,
-          rsPerKg,
-          rsPerCut,
-          totalCost: cost,
-          createdAt: new Date().toISOString(),
-        };
+        if (empty) empty.style.display = 'none';
+        if (table) table.style.display = 'table';
+        records.forEach(function (r) {
+          var tr = document.createElement('tr');
+          var date = r.createdAt ? new Date(r.createdAt).toLocaleString() : '–';
+          tr.innerHTML = '<td>' + date + '</td><td>' + (r.clientName || '–') + '</td><td>' + (r.totalWeight != null ? Number(r.totalWeight).toFixed(3) : '–') + '</td><td>' + (r.totalCost != null ? Number(r.totalCost).toFixed(2) : '–') + '</td>';
+          tbody.appendChild(tr);
+        });
       }
 
     })();
