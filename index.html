@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Metal Cutting & Straightening – Record</title>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --surface: #1e293b;
+      --border: #334155;
+      --text: #f1f5f9;
+      --muted: #94a3b8;
+      --accent: #38bdf8;
+      --accent-hover: #7dd3fc;
+    }
+    * { box-sizing: border-box; }
+    body {
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      margin: 0;
+      padding: 1rem;
+      min-height: 100vh;
+    }
+    .container { max-width: 720px; margin: 0 auto; }
+    h1 {
+      font-size: 1.5rem;
+      font-weight: 600;
+      margin-bottom: 0.5rem;
+      color: var(--accent);
+    }
+    .subtitle { color: var(--muted); font-size: 0.9rem; margin-bottom: 1.5rem; }
+    section {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 1.25rem;
+      margin-bottom: 1rem;
+    }
+    section h2 {
+      font-size: 1rem;
+      font-weight: 600;
+      margin: 0 0 1rem 0;
+      padding-bottom: 0.5rem;
+      border-bottom: 1px solid var(--border);
+      color: var(--accent);
+    }
+    .row { display: flex; flex-wrap: wrap; gap: 1rem; margin-bottom: 0.75rem; }
+    .row:last-child { margin-bottom: 0; }
+    label {
+      display: flex; flex-direction: column; gap: 0.25rem;
+      font-size: 0.85rem; color: var(--muted);
+    }
+    label span { min-width: 100px; }
+    input[type="text"], input[type="number"], input[type="checkbox"] {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text);
+      padding: 0.5rem 0.75rem;
+      font-size: 1rem;
+      width: 100%;
+    }
+    input[type="number"] { width: 6rem; min-width: 80px; }
+    input:focus { outline: none; border-color: var(--accent); }
+    .inline-label { flex-direction: row; align-items: center; }
+    .inline-label input[type="checkbox"] { width: auto; }
+    .result {
+      background: var(--bg);
+      border: 1px solid var(--accent);
+      border-radius: 6px;
+      padding: 0.6rem 0.75rem;
+      font-weight: 600;
+      font-size: 1.1rem;
+      color: var(--accent);
+      min-height: 2.5rem;
+      display: flex;
+      align-items: center;
+    }
+    @media (max-width: 600px) {
+      .result { font-size: 1.25rem; min-height: 3rem; }
+    }
+    button {
+      background: var(--accent);
+      color: var(--bg);
+      border: none;
+      border-radius: 8px;
+      padding: 0.75rem 1.5rem;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    button:hover { background: var(--accent-hover); }
+    button.secondary {
+      background: var(--surface);
+      color: var(--accent);
+      border: 1px solid var(--accent);
+    }
+    .actions { margin-top: 1rem; display: flex; gap: 0.75rem; flex-wrap: wrap; }
+    #recordsList { margin-top: 2rem; }
+    #recordsList h2 { margin-bottom: 1rem; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.85rem;
+    }
+    th, td { padding: 0.5rem 0.75rem; text-align: left; border-bottom: 1px solid var(--border); }
+    th { color: var(--muted); font-weight: 500; }
+    .empty-records { color: var(--muted); font-style: italic; padding: 1rem 0; }
+    .total-cost-display { font-size: 1.1rem; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Metal Cutting & Straightening</h1>
+    <p class="subtitle">Record – weight and cost calculator</p>
+
+    <form id="mainForm">
+      <div id="calcError" style="display:none; background:#7f1d1d; color:#fecaca; padding:0.5rem; margin-bottom:1rem; border-radius:6px; font-size:0.9rem;"></div>
+      <section>
+        <h2>Client</h2>
+        <div class="row">
+          <label style="flex: 1; min-width: 200px;">
+            <span>Client name</span>
+            <input type="text" id="clientName" placeholder="Enter client name" required>
+          </label>
+        </div>
+      </section>
+
+      <section>
+        <h2>Original plate size (mm)</h2>
+        <div class="row">
+          <label><span>Length (mm)</span><input type="number" id="origLength" min="0" step="0.1" value="0"></label>
+          <label><span>Width (mm)</span><input type="number" id="origWidth" min="0" step="0.1" value="0"></label>
+          <label><span>Thickness (mm)</span><input type="number" id="origThickness" min="0" step="0.1" value="0"></label>
+          <label><span>Quantity</span><input type="number" id="origQuantity" min="1" value="1"></label>
+        </div>
+      </section>
+
+      <section>
+        <h2>Cutting size (mm)</h2>
+        <div class="row">
+          <label><span>Length (mm)</span><input type="number" id="cutLength" min="0" step="0.1" value="0"></label>
+          <label><span>Width (mm)</span><input type="number" id="cutWidth" min="0" step="0.1" value="0"></label>
+          <label><span>Thickness (mm)</span><input type="number" id="cutThickness" min="0" step="0.1" value="0"></label>
+          <label><span>Quantity</span><input type="number" id="cutQuantity" min="1" value="1"></label>
+        </div>
+        <div class="row" style="margin-top: 0.75rem;">
+          <label><span>Weight per piece (kg)</span><div class="result" id="weightPerPiece">0</div></label>
+          <label><span>Total weight (kg)</span><div class="result" id="totalWeight">0</div></label>
+        </div>
+      </section>
+
+      <section>
+        <h2>Gauge cutting</h2>
+        <div class="row">
+          <label class="inline-label">
+            <input type="checkbox" id="gaugeCutting">
+            <span>Gauge cutting</span>
+          </label>
+        </div>
+        <div id="gaugeFields" style="display: none;">
+          <div class="row">
+            <label><span>Gauge size (mm)</span><input type="number" id="gaugeSize" min="0" step="0.1" value="0"></label>
+            <label><span>Total cuts</span><input type="number" id="totalCuts" min="0" value="0" placeholder="Leave 0 for weight-based pricing"></label>
+            <label><span>Total weight (kg)</span><input type="number" id="gaugeTotalWeight" min="0" step="0.01" value="0"></label>
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <h2>Pricing</h2>
+        <div class="row">
+          <label><span>Rs. per Kg</span><input type="number" id="rsPerKg" min="0" step="0.01" value="0"></label>
+          <label><span>Rs. per cut</span><input type="number" id="rsPerCut" min="0" step="0.01" value="0"></label>
+        </div>
+        <div class="row" style="margin-top: 0.75rem;">
+          <label><span>Total cost (Rs.)</span><div class="result total-cost-display" id="totalCost">0</div></label>
+        </div>
+      </section>
+
+      <div class="actions">
+        <button type="button" class="secondary" id="btnRecalc">Recalculate</button>
+        <button type="submit">Save record</button>
+        <button type="button" class="secondary" id="btnReset">Reset form</button>
+      </div>
+    </form>
+
+    <div id="recordsList">
+      <h2>Saved records</h2>
+      <div id="recordsTableWrap">
+        <table id="recordsTable" style="display: none;">
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Client</th>
+              <th>Total weight (kg)</th>
+              <th>Total cost (Rs.)</th>
+            </tr>
+          </thead>
+          <tbody id="recordsBody"></tbody>
+        </table>
+        <p class="empty-records" id="emptyRecords">No records yet. Save a record above.</p>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      var DENSITY_KG_M3 = 7850;
+
+      function $(id) { return document.getElementById(id); }
+
+      function volumeM3(lengthMm, widthMm, thicknessMm) {
+        return (lengthMm / 1000) * (widthMm / 1000) * (thicknessMm / 1000);
+      }
+
+      function weightKg(lengthMm, widthMm, thicknessMm) {
+        return volumeM3(lengthMm, widthMm, thicknessMm) * DENSITY_KG_M3;
+      }
+
+      function recalc() {
+        var errEl = $('calcError');
+        try {
+          if (errEl) { errEl.style.display = 'none'; errEl.textContent = ''; }
+          var cutLen = $('cutLength');
+          var cutWid = $('cutWidth');
+          var cutThick = $('cutThickness');
+          var cutQtyEl = $('cutQuantity');
+          var totalCutsEl = $('totalCuts');
+          var rsPerKgEl = $('rsPerKg');
+          var rsPerCutEl = $('rsPerCut');
+          var gaugeCheck = $('gaugeCutting');
+          var gaugeWeightEl = $('gaugeTotalWeight');
+          var wpEl = $('weightPerPiece');
+          var totalWEl = $('totalWeight');
+          var costEl = $('totalCost');
+          if (!cutLen || !cutWid || !cutThick || !wpEl || !totalWEl || !costEl) {
+            if (errEl) { errEl.textContent = 'Missing fields. Try refreshing the page.'; errEl.style.display = 'block'; }
+            return;
+          }
+
+          var cutL = parseFloat(cutLen.value) || 0;
+          var cutW = parseFloat(cutWid.value) || 0;
+          var cutT = parseFloat(cutThick.value) || 0;
+          var cutQty = Math.max(0, Math.floor(parseFloat(cutQtyEl.value) || 0));
+          var wp = weightKg(cutL, cutW, cutT);
+          var totalW = wp * cutQty;
+          wpEl.textContent = wp.toFixed(3);
+          totalWEl.textContent = totalW.toFixed(3);
+
+          var totalCuts = parseFloat(totalCutsEl.value) || 0;
+          var rsPerKg = parseFloat(rsPerKgEl.value) || 0;
+          var rsPerCut = parseFloat(rsPerCutEl.value) || 0;
+          var cost = 0;
+          if (totalCuts > 0 && rsPerCut > 0) {
+            cost = totalCuts * rsPerCut;
+          } else {
+            var weightForCost = (gaugeCheck && gaugeCheck.checked && gaugeWeightEl && gaugeWeightEl.value !== '')
+              ? (parseFloat(gaugeWeightEl.value) || 0)
+              : totalW;
+            cost = weightForCost * rsPerKg;
+          }
+          costEl.textContent = cost.toFixed(2);
+        } catch (e) {
+          if (errEl) {
+            errEl.textContent = 'Error: ' + (e.message || String(e));
+            errEl.style.display = 'block';
+          }
+        }
+      }
+
+      function bindRecalc(el) {
+        if (!el) return;
+        el.addEventListener('input', recalc);
+        el.addEventListener('change', recalc);
+        el.addEventListener('blur', recalc);
+        el.addEventListener('keyup', recalc);
+      }
+      var recalcTimer = null;
+      function startRecalcPoll() {
+        if (recalcTimer) return;
+        recalcTimer = setInterval(recalc, 500);
+      }
+      function stopRecalcPoll() {
+        if (recalcTimer) {
+          clearInterval(recalcTimer);
+          recalcTimer = null;
+        }
+      }
+
+      var globalRecalcInterval = null;
+      function startGlobalRecalc() {
+        if (globalRecalcInterval) return;
+        recalc();
+        globalRecalcInterval = setInterval(recalc, 1500);
+      }
+      function stopGlobalRecalc() {
+        if (globalRecalcInterval) {
+          clearInterval(globalRecalcInterval);
+          globalRecalcInterval = null;
+        }
+      }
+
+      var DB_NAME = 'MetalCuttingDB';
+      var STORE_NAME = 'records';
+      var DB_VERSION = 1;
+
+      function init() {
+        ['cutLength', 'cutWidth', 'cutThickness', 'cutQuantity', 'totalCuts', 'rsPerKg', 'rsPerCut', 'gaugeTotalWeight'].forEach(function (id) {
+          var el = $(id);
+          bindRecalc(el);
+          if (el) {
+            el.addEventListener('focus', startRecalcPoll);
+            el.addEventListener('blur', function () {
+              setTimeout(stopRecalcPoll, 300);
+            });
+          }
+        });
+        var gaugeEl = $('gaugeCutting');
+        if (gaugeEl) {
+          gaugeEl.addEventListener('change', function () {
+            var gf = $('gaugeFields');
+            if (gf) gf.style.display = this.checked ? 'block' : 'none';
+            recalc();
+          });
+        }
+        var btnRecalc = $('btnRecalc');
+        if (btnRecalc) {
+          function doRecalc() {
+            if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
+            setTimeout(recalc, 100);
+          }
+          btnRecalc.addEventListener('click', function () { doRecalc(); });
+          btnRecalc.addEventListener('touchend', function (e) {
+            e.preventDefault();
+            doRecalc();
+          }, { passive: false });
+        }
+        if (typeof document.visibilityState !== 'undefined') {
+          document.addEventListener('visibilitychange', function () {
+            if (document.visibilityState === 'visible') startGlobalRecalc();
+            else stopGlobalRecalc();
+          });
+        }
+        if (typeof document.visibilityState === 'undefined' || document.visibilityState === 'visible') {
+          startGlobalRecalc();
+        }
+        var form = $('mainForm');
+        if (form) form.addEventListener('submit', function (e) {
+          e.preventDefault();
+          var record = getFormRecord();
+          saveRecord(record).then(function () {
+            loadRecords().then(renderRecords);
+          }).catch(function (err) { alert('Could not save: ' + err.message); });
+        });
+        var btnReset = $('btnReset');
+        if (btnReset) btnReset.addEventListener('click', function () {
+          form = $('mainForm');
+          if (form) form.reset();
+          var gf = $('gaugeFields');
+          if (gf) gf.style.display = 'none';
+          recalc();
+        });
+        loadRecords().then(renderRecords);
+        recalc();
+      }
+
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', init);
+      } else {
+        init();
+      }
+
+      function openDB() {
+        return new Promise((resolve, reject) => {
+          const r = indexedDB.open(DB_NAME, DB_VERSION);
+          r.onerror = () => reject(r.error);
+          r.onsuccess = () => resolve(r.result);
+          r.onupgradeneeded = (e) => {
+            const db = e.target.result;
+            if (!db.objectStoreNames.contains(STORE_NAME)) {
+              const store = db.createObjectStore(STORE_NAME, { keyPath: 'id', autoIncrement: true });
+              store.createIndex('createdAt', 'createdAt', { unique: false });
+            }
+          };
+        });
+      }
+
+      function saveRecord(record) {
+        return openDB().then(db => {
+          return new Promise((resolve, reject) => {
+            const tx = db.transaction(STORE_NAME, 'readwrite');
+            const store = tx.objectStore(STORE_NAME);
+            const r = store.add(record);
+            r.onsuccess = () => resolve(r.result);
+            r.onerror = () => reject(r.error);
+          });
+        });
+      }
+
+      function loadRecords() {
+        return openDB().then(db => {
+          return new Promise((resolve, reject) => {
+            const tx = db.transaction(STORE_NAME, 'readonly');
+            const store = tx.objectStore(STORE_NAME);
+            const idx = store.index('createdAt');
+            const req = idx.openCursor(null, 'prev');
+            const rows = [];
+            req.onsuccess = () => {
+              const cursor = req.result;
+              if (cursor) {
+                rows.push(cursor.value);
+                cursor.continue();
+              } else resolve(rows);
+            };
+            req.onerror = () => reject(req.error);
+          });
+        });
+      }
+
+      function renderRecords(records) {
+        const tbody = $('recordsBody');
+        const table = $('recordsTable');
+        const empty = $('emptyRecords');
+        tbody.innerHTML = '';
+        if (records.length === 0) {
+          table.style.display = 'none';
+          empty.style.display = 'block';
+          return;
+        }
+        empty.style.display = 'none';
+        table.style.display = 'table';
+        records.forEach(r => {
+          const tr = document.createElement('tr');
+          const date = r.createdAt ? new Date(r.createdAt).toLocaleString() : '–';
+          tr.innerHTML = '<td>' + date + '</td><td>' + (r.clientName || '–') + '</td><td>' + (r.totalWeight != null ? Number(r.totalWeight).toFixed(3) : '–') + '</td><td>' + (r.totalCost != null ? Number(r.totalCost).toFixed(2) : '–') + '</td>';
+          tbody.appendChild(tr);
+        });
+      }
+
+      function getFormRecord() {
+        const cutL = Number($('cutLength').value) || 0;
+        const cutW = Number($('cutWidth').value) || 0;
+        const cutT = Number($('cutThickness').value) || 0;
+        const cutQty = Math.max(0, Math.floor(Number($('cutQuantity').value) || 0));
+        const totalW = weightKg(cutL, cutW, cutT) * cutQty;
+        const totalCuts = Number($('totalCuts').value) || 0;
+        const rsPerKg = Number($('rsPerKg').value) || 0;
+        const rsPerCut = Number($('rsPerCut').value) || 0;
+        let cost = 0;
+        if (totalCuts > 0 && rsPerCut > 0) {
+          cost = totalCuts * rsPerCut;
+        } else {
+          const weightForCost = $('gaugeCutting').checked && $('gaugeTotalWeight').value
+            ? Number($('gaugeTotalWeight').value) || 0
+            : totalW;
+          cost = weightForCost * rsPerKg;
+        }
+        return {
+          clientName: ($('clientName').value || '').trim(),
+          originalPlate: {
+            length: Number($('origLength').value) || 0,
+            width: Number($('origWidth').value) || 0,
+            thickness: Number($('origThickness').value) || 0,
+            quantity: Math.max(1, Math.floor(Number($('origQuantity').value) || 1)),
+          },
+          cuttingSize: {
+            length: cutL,
+            width: cutW,
+            thickness: cutT,
+            quantity: cutQty,
+          },
+          weightPerPiece: weightKg(cutL, cutW, cutT),
+          totalWeight: totalW,
+          gaugeCutting: $('gaugeCutting').checked,
+          gaugeSize: $('gaugeCutting').checked ? (Number($('gaugeSize').value) || 0) : undefined,
+          totalCuts: totalCuts || undefined,
+          gaugeTotalWeight: $('gaugeCutting').checked ? (Number($('gaugeTotalWeight').value) || undefined) : undefined,
+          rsPerKg,
+          rsPerCut,
+          totalCost: cost,
+          createdAt: new Date().toISOString(),
+        };
+      }
+
+    })();
+  </script>
+</body>
+</html>
